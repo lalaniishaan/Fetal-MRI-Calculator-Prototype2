@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateCase,
   evaluateMeasurement,
+  generateReport,
   parseGestationalAge
 } from "./core.js";
 
@@ -9,6 +10,56 @@ describe("gestational age parsing", () => {
   it("accepts TEST.md weeks-and-days notation", () => {
     expect(parseGestationalAge("28 w 0 d")).toBe(28);
     expect(parseGestationalAge("22+3")).toBeCloseTo(22 + 3 / 7, 6);
+  });
+});
+
+describe("SPEC.md 4.1 report generation and TEST.md DDx triggers", () => {
+  it("renders the normal-control impression when no DDx cards fire", () => {
+    const result = evaluateCase({
+      ga: "28 w 0 d",
+      measurements: {
+        atrium_right: 7.4,
+        atrium_left: 7.4,
+        cc_length: 32.5,
+        third_ventricle: 1.7
+      }
+    });
+
+    const report = generateReport(result);
+
+    expect(result.ddxCards).toEqual([]);
+    expect(result.impression).toBe("No abnormal biometric findings.");
+    expect(report).toContain("IMPRESSION");
+    expect(report).toContain("No abnormal biometric findings.");
+    expect(report).toContain("Atrium-R: 7.4 mm");
+  });
+
+  it("fires TEST.md Case M1 isolated mild ventriculomegaly and renders its impression", () => {
+    const result = evaluateCase({
+      ga: "24 w 0 d",
+      measurements: {
+        skull_bpd: 60.6,
+        skull_ofd: 84.5,
+        brain_bpd: 58.4,
+        brain_ofd_left: 79.5,
+        brain_ofd_right: 79.6,
+        atrium_right: 11.0,
+        atrium_left: 11.0,
+        csp: 3.4,
+        cc_length: 24.0,
+        tcd: 27.6,
+        vermis_cc: 12.4,
+        vermis_ap: 5.8,
+        pons_ap: 7.5,
+        third_ventricle: 1.5
+      }
+    });
+
+    expect(result.ddxCards.map((card) => card.id)).toEqual(["mild_ventriculomegaly"]);
+    expect(result.impression).toBe(
+      "Isolated mild ventriculomegaly; consider postnatal MRI follow-up. Pooled neurodevelopmental delay rate ~7.9% (Pagani 2014)."
+    );
+    expect(generateReport(result)).toContain("mild ventriculomegaly");
   });
 });
 

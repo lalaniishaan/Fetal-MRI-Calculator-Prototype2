@@ -2,6 +2,13 @@
 
 ## Completed
 
+- Increment 2:
+  - Added basic structured report generation for `SPEC.md` 4.1 findings and impression output.
+  - Added the first DDx trigger from `SPEC.md` 4.6 / `TEST.md` section 3: mild ventriculomegaly when either atrial diameter is 10.0-14.9 mm.
+  - Added the required isolated mild-VM impression text from `TEST.md` Case M1.
+  - Added tests covering the normal-control report and bilateral isolated mild ventriculomegaly.
+
+- Increment 1:
 - Created the initial TypeScript/Vitest project scaffold.
 - Implemented the registry-driven normative model evaluator for the model families in `SPEC.md` 4.2.1:
   - quadratic mean with linear SD,

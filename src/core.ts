@@ -82,6 +82,12 @@ export type MeasurementEvaluation = {
   sources: SourceEvaluation[];
 };
 
+export type DdxCard = {
+  id: "mild_ventriculomegaly";
+  title: string;
+  referencedParameters: ParameterId[];
+};
+
 export type CaseInput = {
   ga: string | number;
   measurements: Partial<Record<ParameterId, number>>;
@@ -90,6 +96,7 @@ export type CaseInput = {
 export type CaseEvaluation = {
   gaWeeks: number;
   measurements: Partial<Record<ParameterId, MeasurementEvaluation>>;
+  ddxCards: DdxCard[];
   impression: string;
 };
 
@@ -222,13 +229,39 @@ export function evaluateCase(input: CaseInput): CaseEvaluation {
     }
   }
 
+  const ddxCards = detectDdxCards(input.measurements);
+
   return {
     gaWeeks,
     measurements,
-    impression: hasAbnormalMeasurement(measurements)
-      ? "Abnormal biometric findings present."
-      : "No abnormal biometric findings."
+    ddxCards,
+    impression: impressionFor(ddxCards)
   };
+}
+
+export function generateReport(result: CaseEvaluation): string {
+  const findings = Object.values(result.measurements).map((measurement) => {
+    const percentile = formatPercentile(measurement.percentile);
+
+    return `${labelForParameter(measurement.parameterId)}: ${measurement.value.toFixed(1)} mm (Z: ${formatZ(
+      measurement.consensusZ
+    )}, ${percentile} percentile; ${measurement.band}; ${measurement.agreement}).`;
+  });
+
+  const sections = [
+    "FINDINGS",
+    findings.join("\n"),
+    "",
+    "IMPRESSION",
+    result.impression
+  ];
+
+  if (result.ddxCards.length > 0) {
+    sections.push("", "DIFFERENTIAL CONSIDERATIONS");
+    sections.push(...result.ddxCards.map((card) => `${card.title}.`));
+  }
+
+  return sections.join("\n");
 }
 
 function evaluateSource(
@@ -297,18 +330,85 @@ function bandForZ(z: number): Band {
   return "normal";
 }
 
-function hasAbnormalMeasurement(
-  measurements: Partial<Record<ParameterId, MeasurementEvaluation>>
-): boolean {
-  return Object.values(measurements).some((measurement) => measurement.band !== "normal");
-}
-
 function average(values: number[]): number {
   if (values.length === 0) {
     throw new Error("Cannot average an empty set.");
   }
 
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function detectDdxCards(measurements: Partial<Record<ParameterId, number>>): DdxCard[] {
+  const atrialParameters: Array<readonly [ParameterId, number | undefined]> = [
+    ["atrium_right", measurements.atrium_right],
+    ["atrium_left", measurements.atrium_left]
+  ];
+  const mildVmParameters = atrialParameters
+    .filter((entry): entry is readonly [ParameterId, number] => {
+      const value = entry[1];
+
+      return value !== undefined && value >= 10 && value < 15;
+    })
+    .map(([parameterId]) => parameterId);
+
+  if (mildVmParameters.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      id: "mild_ventriculomegaly",
+      title: "Mild ventriculomegaly",
+      referencedParameters: mildVmParameters
+    }
+  ];
+}
+
+function impressionFor(ddxCards: DdxCard[]): string {
+  if (ddxCards.some((card) => card.id === "mild_ventriculomegaly")) {
+    return "Isolated mild ventriculomegaly; consider postnatal MRI follow-up. Pooled neurodevelopmental delay rate ~7.9% (Pagani 2014).";
+  }
+
+  return "No abnormal biometric findings.";
+}
+
+function labelForParameter(parameterId: ParameterId): string {
+  const labels: Record<ParameterId, string> = {
+    skull_bpd: "Skull BPD",
+    skull_ofd: "Skull OFD",
+    brain_bpd: "Brain BPD",
+    brain_ofd_left: "Brain OFD-L",
+    brain_ofd_right: "Brain OFD-R",
+    atrium_left: "Atrium-L",
+    atrium_right: "Atrium-R",
+    csp: "CSP",
+    cc_length: "CC",
+    tcd: "TCD",
+    vermis_cc: "Vermis CC",
+    vermis_ap: "Vermis AP",
+    pons_ap: "Pons AP",
+    third_ventricle: "Third ventricle"
+  };
+
+  return labels[parameterId];
+}
+
+function formatZ(z: number): string {
+  const fixed = z.toFixed(1);
+
+  return z > 0 ? `+${fixed}` : fixed;
+}
+
+function formatPercentile(percentile: number): string {
+  if (percentile >= 99.9) {
+    return ">=99.9th";
+  }
+
+  if (percentile <= 0.1) {
+    return "<=0.1st";
+  }
+
+  return `${percentile.toFixed(0)}th`;
 }
 
 function normalCdf(z: number): number {

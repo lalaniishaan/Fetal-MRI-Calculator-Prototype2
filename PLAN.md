@@ -8,3 +8,11 @@
 - Implement the minimum calculator core for model-family evaluation, z-score/percentile calculation, banding, and agreement state.
 - Run unit tests, typecheck, and lint; fix any red checks.
 - Update `PROGRESS.md` and commit with a message linking `SPEC.md` sections 4.2.1-4.2.3.
+
+## Increment 2 - Basic report and ventriculomegaly trigger
+
+- Add tests for `SPEC.md` 4.1 report generation and `TEST.md` Case M1.
+- Implement DDx card detection for mild ventriculomegaly from atrial measurements between 10.0 and 14.9 mm.
+- Generate the normal-control impression and the isolated mild-VM impression text required by `TEST.md`.
+- Include measured-row findings with z-score, percentile, band, and agreement state in the report text.
+- Re-run tests, typecheck, and lint; update `PROGRESS.md`; commit.
