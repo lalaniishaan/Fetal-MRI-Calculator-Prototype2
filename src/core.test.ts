@@ -1,0 +1,71 @@
+import { describe, expect, it } from "vitest";
+import {
+  evaluateCase,
+  evaluateMeasurement,
+  parseGestationalAge
+} from "./core.js";
+
+describe("gestational age parsing", () => {
+  it("accepts TEST.md weeks-and-days notation", () => {
+    expect(parseGestationalAge("28 w 0 d")).toBe(28);
+    expect(parseGestationalAge("22+3")).toBeCloseTo(22 + 3 / 7, 6);
+  });
+});
+
+describe("SPEC.md 4.2 consensus engine", () => {
+  it("passes through a single in-range Luis source", () => {
+    const result = evaluateMeasurement("skull_bpd", "28 w 0 d", 75.5);
+
+    expect(result.agreement).toBe("single");
+    expect(result.rowExtrapolated).toBe(false);
+    expect(result.band).toBe("normal");
+    expect(result.sources).toHaveLength(1);
+    expect(result.consensusZ).toBeCloseTo(0.74, 2);
+    expect(result.percentile).toBeGreaterThan(70);
+    expect(result.percentile).toBeLessThan(80);
+  });
+
+  it("evaluates the SPEC.md TCD worked example coefficient block with two sources", () => {
+    const result = evaluateMeasurement("tcd", 28, 33);
+
+    expect(result.agreement).toBe("agree");
+    expect(result.disagreementWidth).toBeCloseTo(0.982, 3);
+    expect(result.consensusZ).toBeCloseTo(0.326, 3);
+    expect(result.sources.map((source) => source.sourceId).sort()).toEqual([
+      "DOVJAK_2021",
+      "LUIS_2025"
+    ]);
+  });
+
+  it("keeps TEST.md Case N2 normal controls normal with expected agreement states", () => {
+    const result = evaluateCase({
+      ga: "28 w 0 d",
+      measurements: {
+        skull_bpd: 75.5,
+        skull_ofd: 102.6,
+        brain_bpd: 73.2,
+        brain_ofd_left: 97.1,
+        brain_ofd_right: 97.2,
+        atrium_right: 7.4,
+        atrium_left: 7.4,
+        csp: 4.4,
+        cc_length: 32.5,
+        tcd: 34.5,
+        vermis_cc: 16.0,
+        vermis_ap: 7.3,
+        pons_ap: 9.5,
+        third_ventricle: 1.7
+      }
+    });
+
+    expect(result.measurements.skull_bpd?.band).toBe("normal");
+    expect(result.measurements.atrium_right?.band).toBe("normal");
+    expect(result.measurements.atrium_left?.band).toBe("normal");
+    expect(result.measurements.cc_length?.band).toBe("normal");
+    expect(result.measurements.third_ventricle?.band).toBe("normal");
+    expect(result.measurements.tcd?.sources).toHaveLength(2);
+    expect(result.measurements.vermis_cc?.sources).toHaveLength(2);
+    expect(result.measurements.vermis_ap?.sources).toHaveLength(2);
+    expect(result.measurements.pons_ap?.sources).toHaveLength(2);
+  });
+});
