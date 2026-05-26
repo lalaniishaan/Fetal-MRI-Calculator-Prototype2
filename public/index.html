@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fetal MRI Biometry Calculator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Fetal MRI Biometry Calculator</h1>
+      <form id="calculator-form">
+        <label>
+          Gestational age (weeks or w+d):
+          <input id="ga" name="ga" placeholder="28w3" required />
+        </label>
+        <fieldset>
+          <legend>Measurements (mm)</legend>
+          <div class="grid">
+            <label>Skull BPD<input name="skull_bpd" type="number" step="0.1" /></label>
+            <label>Skull OFD<input name="skull_ofd" type="number" step="0.1" /></label>
+            <label>Brain BPD<input name="brain_bpd" type="number" step="0.1" /></label>
+            <label>Brain OFD-L<input name="brain_ofd_left" type="number" step="0.1" /></label>
+            <label>Brain OFD-R<input name="brain_ofd_right" type="number" step="0.1" /></label>
+            <label>Atrium L<input name="atrium_left" type="number" step="0.1" /></label>
+            <label>Atrium R<input name="atrium_right" type="number" step="0.1" /></label>
+            <label>CSP<input name="csp" type="number" step="0.1" /></label>
+            <label>CC length<input name="cc_length" type="number" step="0.1" /></label>
+            <label>TCD<input name="tcd" type="number" step="0.1" /></label>
+            <label>Vermis CC<input name="vermis_cc" type="number" step="0.1" /></label>
+            <label>Vermis AP<input name="vermis_ap" type="number" step="0.1" /></label>
+            <label>Pons AP<input name="pons_ap" type="number" step="0.1" /></label>
+            <label>Third ventricle<input name="third_ventricle" type="number" step="0.1" /></label>
+          </div>
+        </fieldset>
+        <button type="submit">Evaluate</button>
+      </form>
+      <section id="result"></section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
