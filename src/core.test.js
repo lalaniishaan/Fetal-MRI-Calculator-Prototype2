@@ -45,8 +45,26 @@ describe("SPEC.md 4.1 report generation and TEST.md DDx triggers", () => {
             }
         });
         expect(result.ddxCards.map((card) => card.id)).toEqual(["mild_ventriculomegaly"]);
-        expect(result.impression).toBe("Isolated mild ventriculomegaly; consider postnatal MRI follow-up. Pooled neurodevelopmental delay rate ~7.9% (Pagani 2014).");
+        expect(result.impression).toContain("Mild ventriculomegaly is present");
+        expect(result.impression).toContain("should not be called isolated if other abnormalities are confirmed");
         expect(generateReport(result)).toContain("mild ventriculomegaly");
+    });
+    it("does not report a normal impression when z-score bands are abnormal without a DDx card", () => {
+        const result = evaluateCase({
+            ga: "28 w 0 d",
+            measurements: {
+                skull_bpd: 95,
+                csp: 1
+            }
+        });
+        expect(result.ddxCards).toEqual([]);
+        expect(result.measurements.skull_bpd?.band).toBe(">95th");
+        expect(result.measurements.csp?.band).toBe("<5th");
+        expect(result.impression).toContain("2 abnormal biometric findings");
+        expect(result.impression).toContain("Skull BPD");
+        expect(result.impression).toContain("CSP");
+        expect(result.impression).not.toContain(" Z ");
+        expect(result.impression).not.toBe("No abnormal biometric findings.");
     });
 });
 describe("SPEC.md 4.2 consensus engine", () => {
@@ -59,6 +77,9 @@ describe("SPEC.md 4.2 consensus engine", () => {
         expect(result.consensusZ).toBeCloseTo(0.74, 2);
         expect(result.percentile).toBeGreaterThan(70);
         expect(result.percentile).toBeLessThan(80);
+        expect(result.sources[0]?.validGa).toEqual({ min: 20, max: 40 });
+        expect(result.sources[0]?.verification.tier).toBe("byte-identical");
+        expect(result.sources[0]?.z).toBeCloseTo(0.74, 2);
     });
     it("evaluates the SPEC.md TCD worked example coefficient block with two sources", () => {
         const result = evaluateMeasurement("tcd", 28, 33);

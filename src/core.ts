@@ -16,6 +16,7 @@ export type ParameterId =
 
 type AgreementState = "single" | "agree" | "disagree";
 type Band = "<5th" | "normal" | ">95th";
+type VerificationTier = "byte-identical" | "transcribed" | "approximation";
 
 type QuadraticMeanLinearSdModel = {
   type: "quadraticMeanLinearSd";
@@ -53,6 +54,7 @@ type NormativeModel =
 type RegistryEntry = {
   sourceId: string;
   label: string;
+  verification: SourceVerification;
   validGa: {
     min: number;
     max: number;
@@ -60,9 +62,21 @@ type RegistryEntry = {
   model: NormativeModel;
 };
 
+export type SourceVerification = {
+  tier: VerificationTier;
+  label: string;
+  lastReviewed: string;
+  note: string;
+};
+
 export type SourceEvaluation = {
   sourceId: string;
   label: string;
+  validGa: {
+    min: number;
+    max: number;
+  };
+  verification: SourceVerification;
   mean: number;
   sigma: number;
   z: number;
@@ -112,6 +126,12 @@ const luis = (
   sourceId: "LUIS_2025",
   label: "Luis 2025",
   validGa: { min: 20, max: 40 },
+  verification: {
+    tier: "byte-identical",
+    label: "Byte-identical",
+    lastReviewed: "2026-05-17",
+    note: "Coefficient block is marked byte-identical to the Luis 2025 open-source reference in the specification manifest."
+  },
   model: { type: "quadraticMeanLinearSd", a, b, c, a5, b5 }
 });
 
@@ -122,6 +142,12 @@ const dovjak = (
   sourceId: "DOVJAK_2021",
   label: "Dovjak 2021",
   validGa: { min: 14, max: 39.3 },
+  verification: {
+    tier: "transcribed",
+    label: "Transcribed",
+    lastReviewed: "2026-05-17",
+    note: "Slope/intercept pairs are transcribed from the manifest and still require original-table byte checking before production use."
+  },
   model: { type: "perPercentileLinear", p5, p95 }
 });
 
@@ -156,6 +182,12 @@ const sourceRegistry: Record<ParameterId, RegistryEntry[]> = {
       sourceId: "BIRNBAUM_2018_APPROX",
       label: "Birnbaum 2018 approximation",
       validGa: { min: 18, max: 37 },
+      verification: {
+        tier: "approximation",
+        label: "Approximation",
+        lastReviewed: "2026-05-17",
+        note: "Hand-fit approximation; the specification recommends replacing it with verified table data or threshold-only display before clinical reporting."
+      },
       model: { type: "linearMeanConstantSd", mMu: 0.02, bMu: 1.2, sigma: 0.6 }
     }
   ]
@@ -230,12 +262,15 @@ export function evaluateCase(input: CaseInput): CaseEvaluation {
   }
 
   const ddxCards = detectDdxCards(input.measurements);
+  const evaluatedMeasurements = Object.values(measurements).filter(
+    (measurement): measurement is MeasurementEvaluation => measurement !== undefined
+  );
 
   return {
     gaWeeks,
     measurements,
     ddxCards,
-    impression: impressionFor(ddxCards)
+    impression: impressionFor(ddxCards, evaluatedMeasurements)
   };
 }
 
@@ -275,6 +310,8 @@ function evaluateSource(
   return {
     sourceId: entry.sourceId,
     label: entry.label,
+    validGa: entry.validGa,
+    verification: entry.verification,
     mean,
     sigma,
     z,
@@ -364,12 +401,65 @@ function detectDdxCards(measurements: Partial<Record<ParameterId, number>>): Ddx
   ];
 }
 
-function impressionFor(ddxCards: DdxCard[]): string {
-  if (ddxCards.some((card) => card.id === "mild_ventriculomegaly")) {
-    return "Isolated mild ventriculomegaly; consider postnatal MRI follow-up. Pooled neurodevelopmental delay rate ~7.9% (Pagani 2014).";
+function impressionFor(ddxCards: DdxCard[], measurements: MeasurementEvaluation[]): string {
+  const abnormalMeasurements = measurements.filter((measurement) => measurement.band !== "normal");
+  const mildVentriculomegaly = ddxCards.some((card) => card.id === "mild_ventriculomegaly");
+
+  if (mildVentriculomegaly && abnormalMeasurements.length === 0) {
+    return "Mild ventriculomegaly trigger present; review atrial measurements and source-specific z-scores.";
+  }
+
+  if (mildVentriculomegaly && abnormalMeasurements.length > 0) {
+    const nonAtrialAbnormal = abnormalMeasurements.filter(
+      (measurement) => measurement.parameterId !== "atrium_left" && measurement.parameterId !== "atrium_right"
+    );
+    const additionalText =
+      nonAtrialAbnormal.length > 0
+        ? ` Additional abnormal biometric findings: ${formatAbnormalSummary(nonAtrialAbnormal)}.`
+        : "";
+
+    return `Mild ventriculomegaly is present based on atrial measurements.${additionalText} Consider postnatal MRI follow-up. Pooled neurodevelopmental delay rate ~7.9% for isolated mild ventriculomegaly (Pagani 2014); this case should not be called isolated if other abnormalities are confirmed.`;
+  }
+
+  if (abnormalMeasurements.length > 0) {
+    return `${abnormalMeasurements.length} abnormal biometric finding${
+      abnormalMeasurements.length === 1 ? "" : "s"
+    }: ${formatAbnormalSummary(abnormalMeasurements)}. Review source-specific z-scores, GA ranges, and measurement placement before final reporting.`;
   }
 
   return "No abnormal biometric findings.";
+}
+
+function formatAbnormalSummary(measurements: MeasurementEvaluation[]): string {
+  const highMeasurements = measurements
+    .filter((measurement) => measurement.band === ">95th")
+    .sort((left, right) => right.consensusZ - left.consensusZ);
+  const lowMeasurements = measurements
+    .filter((measurement) => measurement.band === "<5th")
+    .sort((left, right) => left.consensusZ - right.consensusZ);
+  const summaryParts: string[] = [];
+
+  if (highMeasurements.length > 0) {
+    summaryParts.push(`high ${formatMeasurementList(highMeasurements)}`);
+  }
+
+  if (lowMeasurements.length > 0) {
+    summaryParts.push(`low ${formatMeasurementList(lowMeasurements)}`);
+  }
+
+  return summaryParts.join("; ");
+}
+
+function formatMeasurementList(measurements: MeasurementEvaluation[]): string {
+  const visibleMeasurements = measurements.slice(0, 3);
+  const hiddenCount = measurements.length - visibleMeasurements.length;
+  const labels = visibleMeasurements.map((measurement) => labelForParameter(measurement.parameterId));
+
+  if (hiddenCount > 0) {
+    labels.push(`${hiddenCount} more`);
+  }
+
+  return labels.join(", ");
 }
 
 function labelForParameter(parameterId: ParameterId): string {

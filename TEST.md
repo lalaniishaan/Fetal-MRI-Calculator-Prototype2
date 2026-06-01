@@ -29,7 +29,7 @@ Three construction patterns are used across the corpus and are labelled in each 
 
 All three patterns are valid for unit testing because the calculator's job is to convert measurements into a band classification and a differential-diagnosis output deterministically. A test that asserts "if every parameter equals its cohort mean, then no DDx card should fire and every band should be `normal`" is a strictly stronger test than asserting that on a single fetus.
 
-### 1.2 Source independence
+### 1.2 Source independence 
 
 Every test case is sourced from a paper, cohort, or threshold that is **not** part of the calculator's source registry (Section 7.2 of `SPEC.md`). The calculator's normative coefficients come from Luis 2025, Dovjak 2021, Birnbaum 2018, Woitek 2014, and (for the third-ventricle threshold) Hertzberg 1997. Test cases are drawn from Tilea 2009, Garel 2004, Kyriakopoulou 2017, Bromley 1994, Nagaraj 2021, Whitehead 2022, Tang 2009, Santo 2012, Griffiths 2016, Aertsen 2019, D'Addario 2001, Pagani 2014, Heaphy-Henault 2018, Carta 2018, Barzilay 2017, Pishjoo 2025, Pinto 2016 (Blake's pouch upward-rotation cohort), Limperopoulos 2006, Malinger 2013 (HPE), Patel 2019 (PCH fetal MRI), and several radiologic case-report compilations. Agreement between the calculator's output and the expected band on a test case therefore demonstrates *external validity* rather than self-confirmation.
 
