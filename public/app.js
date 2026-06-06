@@ -42,10 +42,12 @@ const parameterLabels = {
 };
 
 let latestReport = "";
+let latestEvaluationResult = null;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   latestReport = "";
+  latestEvaluationResult = null;
   copyButton.disabled = true;
   renderMessage("Evaluating", "Calculating z-scores, percentiles, and impression text.");
 
@@ -80,6 +82,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     const result = normalizeResult(await response.json());
+    latestEvaluationResult = result;
     latestReport = buildReport(result);
     resultArea.innerHTML = renderResult(result);
     copyButton.disabled = false;
@@ -91,6 +94,7 @@ form.addEventListener("submit", async (event) => {
 form.addEventListener("reset", () => {
   window.requestAnimationFrame(() => {
     latestReport = "";
+    latestEvaluationResult = null;
     copyButton.disabled = true;
     renderEmptyState();
   });
@@ -342,14 +346,23 @@ async function runRagQuery(mode) {
     return;
   }
 
-  renderRagMessage(mode === "retrieve" ? "Retrieving" : "Answering", "Searching local evidence.");
+  const contextMessage =
+    latestEvaluationResult === null
+      ? "Searching local evidence without a calculator result."
+      : "Searching local evidence using the latest calculator result.";
+  renderRagMessage(mode === "retrieve" ? "Retrieving" : "Answering", contextMessage);
   setRagButtons(true);
 
   try {
+    const request = { query, topK: 5 };
+    if (latestEvaluationResult !== null) {
+      request.caseContext = buildRagCaseContext(latestEvaluationResult);
+    }
+
     const response = await fetch(mode === "retrieve" ? "/api/rag/retrieve" : "/api/rag/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, topK: 5 })
+      body: JSON.stringify(request)
     });
 
     const payload = await response.json();
@@ -385,6 +398,9 @@ function renderRagResult(payload, mode) {
   const contexts = payload.contexts ?? [];
   const answer = payload.answer;
   const modeLabel = payload.generatedWith === "gemini" ? "Gemini" : "Local retrieval";
+  const contextLabel = payload.caseContextIncluded
+    ? '<span class="pill neutral">Calculator result included</span>'
+    : "";
 
   return `
     ${
@@ -393,16 +409,35 @@ function renderRagResult(payload, mode) {
             <div class="measurement-meta">
               <h3>Answer</h3>
               <span class="pill neutral">${escapeHtml(modeLabel)}</span>
+              ${contextLabel}
             </div>
             <p>${escapeHtml(answer)}</p>
           </section>`
         : ""
     }
     <section class="rag-contexts">
-      <h3>Sources</h3>
+      <div class="measurement-meta">
+        <h3>Sources</h3>
+        ${mode === "retrieve" ? contextLabel : ""}
+      </div>
       ${contexts.length > 0 ? contexts.map(renderContextCard).join("") : "<p class=\"subtle\">No matching evidence found.</p>"}
     </section>
   `;
+}
+
+function buildRagCaseContext(result) {
+  return {
+    gaWeeks: result.gaWeeks,
+    impression: result.impression,
+    findings: orderedMeasurements(result).map((measurement) => ({
+      parameterId: measurement.parameterId,
+      value: measurement.value,
+      consensusZ: measurement.consensusZ,
+      percentile: measurement.percentile,
+      band: measurement.band
+    })),
+    differentialConsiderations: (result.ddxCards ?? []).map((card) => card.title)
+  };
 }
 
 function renderContextCard(context) {

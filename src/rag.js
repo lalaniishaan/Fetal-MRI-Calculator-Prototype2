@@ -34,6 +34,22 @@ const stopWords = new Set([
     "was",
     "with"
 ]);
+const parameterLabels = {
+    skull_bpd: "Skull BPD",
+    skull_ofd: "Skull OFD",
+    brain_bpd: "Brain BPD",
+    brain_ofd_left: "Brain OFD-L",
+    brain_ofd_right: "Brain OFD-R",
+    atrium_left: "Atrium-L",
+    atrium_right: "Atrium-R",
+    csp: "CSP",
+    cc_length: "Corpus callosum length",
+    tcd: "Transcerebellar diameter",
+    vermis_cc: "Vermian height",
+    vermis_ap: "Vermian AP diameter",
+    pons_ap: "Pons AP diameter",
+    third_ventricle: "Third ventricle width"
+};
 export class TfidfRagEngine {
     chunks;
     idf;
@@ -66,8 +82,9 @@ export class TfidfRagEngine {
             retrievalBackend: "local-tfidf"
         };
     }
-    retrieve(query, topK = DEFAULT_TOP_K) {
-        const queryVector = vectorize(tokenize(query), this.idf);
+    retrieve(query, topK = DEFAULT_TOP_K, caseContext) {
+        const retrievalQuery = caseContext === undefined ? query : `${query}\n${buildCaseRetrievalText(caseContext)}`;
+        const queryVector = vectorize(tokenize(retrievalQuery), this.idf);
         if (queryVector.size === 0) {
             return [];
         }
@@ -88,9 +105,9 @@ export class TfidfRagEngine {
             chunk: result.chunk
         }));
     }
-    async answer(query, topK = DEFAULT_TOP_K) {
-        const contexts = this.retrieve(query, topK);
-        const prompt = buildGroundedPrompt(query, contexts);
+    async answer(query, topK = DEFAULT_TOP_K, caseContext) {
+        const contexts = this.retrieve(query, topK, caseContext);
+        const prompt = buildGroundedPrompt(query, contexts, caseContext);
         const apiKey = process.env.GEMINI_API_KEY;
         if (apiKey !== undefined && apiKey.trim() !== "" && contexts.length > 0) {
             const answer = await generateWithGemini(prompt, apiKey.trim());
@@ -99,19 +116,21 @@ export class TfidfRagEngine {
                 contexts,
                 generatedWith: "gemini",
                 retrievalBackend: "local-tfidf",
+                caseContextIncluded: caseContext !== undefined,
                 prompt
             };
         }
         return {
-            answer: buildExtractiveAnswer(query, contexts),
+            answer: buildExtractiveAnswer(query, contexts, caseContext),
             contexts,
             generatedWith: "local-retrieval",
             retrievalBackend: "local-tfidf",
+            caseContextIncluded: caseContext !== undefined,
             prompt
         };
     }
 }
-export function buildGroundedPrompt(query, contexts) {
+export function buildGroundedPrompt(query, contexts, caseContext) {
     const contextBlock = contexts.length === 0
         ? "No retrieved context."
         : contexts
@@ -119,12 +138,17 @@ export function buildGroundedPrompt(query, contexts) {
             return `[${context.label}] ${context.chunk.title} (${context.chunk.path}, ${context.chunk.section}, lines ${context.chunk.startLine}-${context.chunk.endLine})\n${context.chunk.text}`;
         })
             .join("\n\n");
+    const caseBlock = caseContext === undefined ? "No calculator result was provided." : formatCaseContext(caseContext);
     return [
         "You are a fetal brain MRI literature assistant.",
-        "Use only the retrieved context below.",
-        "Cite every factual claim with context labels such as [C1].",
+        "Treat the calculator result as authoritative only for the exact case measurements and computed findings shown.",
+        "Use only the retrieved context below for medical interpretation, differential diagnoses, prognosis, and recommendations.",
+        "Cite every literature-based factual claim with context labels such as [C1].",
         "If the retrieved context is insufficient, say so plainly.",
         "Do not include patient identifiers.",
+        "",
+        "Calculator result:",
+        caseBlock,
         "",
         "Retrieved context:",
         contextBlock,
@@ -132,6 +156,42 @@ export function buildGroundedPrompt(query, contexts) {
         `Question: ${query}`,
         "Answer:"
     ].join("\n");
+}
+function buildCaseRetrievalText(caseContext) {
+    const abnormalFindings = caseContext.findings
+        .filter((finding) => finding.band !== "normal")
+        .flatMap((finding) => [
+        finding.parameterId,
+        parameterLabels[finding.parameterId] ?? finding.parameterId,
+        finding.band
+    ]);
+    return [
+        caseContext.impression,
+        ...caseContext.differentialConsiderations,
+        ...abnormalFindings
+    ].join(" ");
+}
+function formatCaseContext(caseContext) {
+    const differentialText = caseContext.differentialConsiderations.length === 0
+        ? "None generated."
+        : caseContext.differentialConsiderations.join("; ");
+    const findingLines = caseContext.findings.length === 0
+        ? ["- No measurements provided."]
+        : caseContext.findings.map((finding) => {
+            const label = parameterLabels[finding.parameterId] ?? finding.parameterId;
+            return `- ${label}: ${finding.value.toFixed(1)} mm; z ${formatSigned(finding.consensusZ)}; percentile ${finding.percentile.toFixed(1)}; band ${finding.band}.`;
+        });
+    return [
+        `Gestational age: ${caseContext.gaWeeks.toFixed(1)} weeks.`,
+        `Impression: ${caseContext.impression}`,
+        `Differential considerations: ${differentialText}`,
+        "Measurements:",
+        ...findingLines
+    ].join("\n");
+}
+function formatSigned(value) {
+    const formatted = value.toFixed(2);
+    return value > 0 ? `+${formatted}` : formatted;
 }
 function chunkDocument(document, options) {
     const sections = splitMarkdownSections(document.text);
@@ -269,9 +329,13 @@ function tokenize(text) {
         .toLowerCase()
         .match(/[a-z0-9]+(?:[-'][a-z0-9]+)?/gu) ?? []).filter((token) => token.length > 1 && !stopWords.has(token));
 }
-function buildExtractiveAnswer(query, contexts) {
+function buildExtractiveAnswer(query, contexts, caseContext) {
+    const caseSummary = caseContext === undefined ? [] : ["Calculator result context:", formatCaseContext(caseContext), ""];
     if (contexts.length === 0) {
-        return "Insufficient retrieved evidence to answer from the local corpus.";
+        return [
+            ...caseSummary,
+            "Insufficient retrieved evidence to answer from the local corpus."
+        ].join("\n");
     }
     const queryTokens = new Set(tokenize(query));
     const evidence = contexts.slice(0, 3).map((context) => {
@@ -279,6 +343,7 @@ function buildExtractiveAnswer(query, contexts) {
         return `${sentence} [${context.label}]`;
     });
     return [
+        ...caseSummary,
         "Retrieved evidence summary:",
         ...evidence,
         "Set GEMINI_API_KEY to enable generated synthesis over the same retrieved context."

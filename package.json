@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "ts-node-dev --respawn --loader ts-node/esm --transpile-only src/server.ts",
+    "dev": "node --watch --loader ts-node/esm src/server.ts",
     "start": "npm run build && node src/server.js",
+    "preview": "npm run build && node src/server.js",
     "build": "tsc",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
