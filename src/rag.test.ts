@@ -56,6 +56,41 @@ describe("local TF-IDF RAG", () => {
     expect(health.chunkCount).toBeGreaterThan(0);
   });
 
+  it("keeps a relevant SPEC.md chunk when validation cases crowd the first page", async () => {
+    const engine = await TfidfRagEngine.fromWorkspace("__missing_rag_workspace__");
+    const contexts = engine.retrieve(
+      "Is a vermis AP of 8.7mm normal for a gestational age of 32w0d normal?",
+      5
+    );
+
+    expect(
+      contexts.some(
+        (context) =>
+          context.chunk.path === "SPEC.md" &&
+          context.chunk.section === "7.3.9 Vermian Antero-Posterior Diameter (vermis_ap)"
+      )
+    ).toBe(true);
+  });
+
+  it("includes a SPEC.md citation in offline answers when SPEC is retrieved", async () => {
+    const originalApiKey = process.env.GEMINI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    const engine = await TfidfRagEngine.fromWorkspace("__missing_rag_workspace__");
+
+    const result = await engine.answer(
+      "Is a vermis AP of 8.7mm normal for a gestational age of 32w0d normal?",
+      5
+    );
+    const specLabel = result.contexts.find((context) => context.chunk.path === "SPEC.md")?.label;
+
+    expect(specLabel).toBeDefined();
+    expect(result.answer).toContain(`[${specLabel}]`);
+
+    if (originalApiKey !== undefined) {
+      process.env.GEMINI_API_KEY = originalApiKey;
+    }
+  });
+
   it("retrieves relevant chunks with provenance labels", () => {
     const engine = TfidfRagEngine.fromDocuments(documents, { chunkWords: 40, overlapWords: 8 });
     const contexts = engine.retrieve("What atrial width defines mild ventriculomegaly?", 2);

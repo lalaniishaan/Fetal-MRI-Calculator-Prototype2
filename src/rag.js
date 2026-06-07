@@ -5,6 +5,9 @@ const DEFAULT_CHUNK_WORDS = 320;
 const DEFAULT_OVERLAP_WORDS = 60;
 const DEFAULT_TOP_K = 5;
 const GEMINI_MODEL = process.env.GEMINI_GENERATION_MODEL ?? "gemini-2.5-flash-lite";
+const SPEC_SOURCE_ID = "SPEC";
+const SPEC_INCLUSION_MIN_SCORE = 0.08;
+const SPEC_INCLUSION_RELATIVE_TO_CUTOFF = 0.8;
 const defaultDocuments = [
     { sourceId: "SPEC", title: "Fetal MRI Biometry Calculator Specification", path: "SPEC.md" },
     { sourceId: "TEST", title: "Validation Cases", path: "TEST.md" },
@@ -51,6 +54,22 @@ const parameterLabels = {
     pons_ap: "Pons AP diameter",
     third_ventricle: "Third ventricle width"
 };
+const parameterSearchTerms = {
+    skull_bpd: ["skull_bpd", "skull bpd", "skull biparietal diameter", "7.3.1"],
+    skull_ofd: ["skull_ofd", "skull ofd", "skull occipito-frontal diameter", "7.3.2"],
+    brain_bpd: ["brain_bpd", "brain bpd", "brain biparietal diameter", "7.3.3"],
+    brain_ofd_left: ["brain_ofd_left", "brain ofd left", "left brain occipito-frontal diameter", "7.3.4"],
+    brain_ofd_right: ["brain_ofd_right", "brain ofd right", "right brain occipito-frontal diameter", "7.3.5"],
+    atrium_left: ["atrium_left", "left atrium", "left atrial diameter", "ventricular atrium left", "7.3.6"],
+    atrium_right: ["atrium_right", "right atrium", "right atrial diameter", "ventricular atrium right", "7.3.6"],
+    csp: ["csp", "cavum septum pellucidum", "7.3.6"],
+    cc_length: ["cc_length", "corpus callosum length", "callosal length", "7.3.6"],
+    tcd: ["tcd", "transcerebellar diameter", "7.3.7"],
+    vermis_cc: ["vermis_cc", "vermis cc", "vermian height", "vermian cranio-caudal length", "7.3.8"],
+    vermis_ap: ["vermis_ap", "vermis ap", "vermian ap", "vermian antero-posterior diameter", "7.3.9"],
+    pons_ap: ["pons_ap", "pons ap", "pons antero-posterior diameter", "7.3.10"],
+    third_ventricle: ["third_ventricle", "third ventricle", "third ventricular width", "7.3.12"]
+};
 export class TfidfRagEngine {
     chunks;
     idf;
@@ -80,12 +99,12 @@ export class TfidfRagEngine {
         };
     }
     retrieve(query, topK = DEFAULT_TOP_K, caseContext) {
-        const retrievalQuery = caseContext === undefined ? query : `${query}\n${buildCaseRetrievalText(caseContext)}`;
+        const retrievalQuery = buildRetrievalQuery(query, caseContext);
         const queryVector = vectorize(tokenize(retrievalQuery), this.idf);
         if (queryVector.size === 0) {
             return [];
         }
-        return this.vectors
+        const scoredResults = this.vectors
             .map((vector, index) => ({
             chunk: this.chunks[index],
             score: dotProduct(queryVector, vector)
@@ -93,8 +112,8 @@ export class TfidfRagEngine {
             .filter((result) => {
             return result.chunk !== undefined && result.score > 0;
         })
-            .sort((left, right) => right.score - left.score)
-            .slice(0, Math.max(1, topK))
+            .sort((left, right) => right.score - left.score);
+        return selectRetrievalResults(scoredResults, Math.max(1, topK))
             .map((result, index) => ({
             rank: index + 1,
             score: result.score,
@@ -126,6 +145,58 @@ export class TfidfRagEngine {
             prompt
         };
     }
+}
+function buildRetrievalQuery(query, caseContext) {
+    const matchedParameterIds = findMatchedParameterIds(query, caseContext);
+    const parameterSearchText = [...matchedParameterIds]
+        .flatMap((parameterId) => parameterSearchTerms[parameterId] ?? [])
+        .join(" ");
+    const sourceRegistryText = matchedParameterIds.size === 0
+        ? ""
+        : "SPEC source registry normative model coefficients percentile z-score Luis Dovjak model family validated GA window";
+    return [
+        query,
+        caseContext === undefined ? "" : buildCaseRetrievalText(caseContext),
+        parameterSearchText,
+        sourceRegistryText
+    ]
+        .filter((part) => part.trim() !== "")
+        .join("\n");
+}
+function findMatchedParameterIds(query, caseContext) {
+    const normalizedQuery = normalizeForMatch(query);
+    const parameterIds = new Set();
+    for (const [parameterId, terms] of Object.entries(parameterSearchTerms)) {
+        if (terms.some((term) => normalizedQuery.includes(normalizeForMatch(term)))) {
+            parameterIds.add(parameterId);
+        }
+    }
+    for (const finding of caseContext?.findings ?? []) {
+        parameterIds.add(finding.parameterId);
+    }
+    return parameterIds;
+}
+function normalizeForMatch(value) {
+    return value
+        .toLowerCase()
+        .replace(/[_-]+/gu, " ")
+        .replace(/[^a-z0-9]+/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim();
+}
+function selectRetrievalResults(scoredResults, topK) {
+    const selected = scoredResults.slice(0, topK);
+    if (selected.length < topK || selected.some((result) => result.chunk.sourceId === SPEC_SOURCE_ID)) {
+        return selected;
+    }
+    const bestSpecResult = scoredResults.find((result) => result.chunk.sourceId === SPEC_SOURCE_ID);
+    const cutoffScore = selected[selected.length - 1]?.score ?? 0;
+    if (bestSpecResult === undefined ||
+        bestSpecResult.score < SPEC_INCLUSION_MIN_SCORE ||
+        bestSpecResult.score < cutoffScore * SPEC_INCLUSION_RELATIVE_TO_CUTOFF) {
+        return selected;
+    }
+    return [...selected.slice(0, topK - 1), bestSpecResult].sort((left, right) => right.score - left.score);
 }
 async function readWorkspaceDocuments(rootDir) {
     try {
@@ -175,17 +246,17 @@ export function buildGroundedPrompt(query, contexts, caseContext) {
     ].join("\n");
 }
 function buildCaseRetrievalText(caseContext) {
-    const abnormalFindings = caseContext.findings
-        .filter((finding) => finding.band !== "normal")
+    const measuredFindings = caseContext.findings
         .flatMap((finding) => [
         finding.parameterId,
         parameterLabels[finding.parameterId] ?? finding.parameterId,
-        finding.band
+        finding.band,
+        finding.band === "normal" ? "normal measurement" : "abnormal measurement"
     ]);
     return [
         caseContext.impression,
         ...caseContext.differentialConsiderations,
-        ...abnormalFindings
+        ...measuredFindings
     ].join(" ");
 }
 function formatCaseContext(caseContext) {
@@ -355,7 +426,7 @@ function buildExtractiveAnswer(query, contexts, caseContext) {
         ].join("\n");
     }
     const queryTokens = new Set(tokenize(query));
-    const evidence = contexts.slice(0, 3).map((context) => {
+    const evidence = selectAnswerEvidence(contexts, 3).map((context) => {
         const sentence = bestSentence(context.chunk.text, queryTokens);
         return `${sentence} [${context.label}]`;
     });
@@ -364,6 +435,20 @@ function buildExtractiveAnswer(query, contexts, caseContext) {
         "Retrieved evidence summary:",
         ...evidence
     ].join("\n");
+}
+function selectAnswerEvidence(contexts, limit) {
+    const selected = contexts.slice(0, limit);
+    if (selected.some((context) => context.chunk.sourceId === SPEC_SOURCE_ID)) {
+        return selected;
+    }
+    const bestSpecContext = contexts.find((context) => context.chunk.sourceId === SPEC_SOURCE_ID);
+    if (bestSpecContext === undefined) {
+        return selected;
+    }
+    if (selected.length < limit) {
+        return [...selected, bestSpecContext];
+    }
+    return [...selected.slice(0, limit - 1), bestSpecContext];
 }
 function bestSentence(text, queryTokens) {
     const sentences = text
