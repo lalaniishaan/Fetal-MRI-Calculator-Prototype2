@@ -5,6 +5,8 @@ const ragForm = document.getElementById("rag-form");
 const ragQuery = document.getElementById("rag-query");
 const ragResult = document.getElementById("rag-result");
 const ragHealth = document.getElementById("rag-health");
+const workspace = document.querySelector(".workspace");
+const ragPanel = document.querySelector(".rag-panel");
 const retrieveOnlyButton = document.getElementById("retrieve-only");
 
 const parameterOrder = [
@@ -43,6 +45,9 @@ const parameterLabels = {
 
 let latestReport = "";
 let latestEvaluationResult = null;
+
+syncRagExpandedWidth();
+window.addEventListener("resize", syncRagExpandedWidth);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -84,7 +89,10 @@ form.addEventListener("submit", async (event) => {
     const result = normalizeResult(await response.json());
     latestEvaluationResult = result;
     latestReport = buildReport(result);
-    resultArea.innerHTML = renderResult(result);
+    animateRagLayout(() => {
+      resultArea.innerHTML = renderResult(result);
+      workspace.classList.add("has-results");
+    });
     copyButton.disabled = false;
   } catch (error) {
     renderMessage("Evaluation failed", error.message, "error");
@@ -96,7 +104,10 @@ form.addEventListener("reset", () => {
     latestReport = "";
     latestEvaluationResult = null;
     copyButton.disabled = true;
-    renderEmptyState();
+    animateRagLayout(() => {
+      renderEmptyState();
+      workspace.classList.remove("has-results");
+    });
   });
 });
 
@@ -141,6 +152,62 @@ function renderMessage(title, body, tone = "") {
       <p>${escapeHtml(body)}</p>
     </div>
   `;
+}
+
+function animateRagLayout(updateLayout) {
+  if (!workspace || !ragPanel) {
+    updateLayout();
+    return;
+  }
+
+  syncRagExpandedWidth();
+  const before = ragPanel.getBoundingClientRect();
+  updateLayout();
+  syncRagExpandedWidth();
+  const after = ragPanel.getBoundingClientRect();
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  const deltaX = before.left - after.left;
+  const deltaY = before.top - after.top;
+  const scaleX = before.width > 0 && after.width > 0 ? before.width / after.width : 1;
+  const changed =
+    Math.abs(deltaX) > 1 ||
+    Math.abs(deltaY) > 1 ||
+    Math.abs(1 - scaleX) > 0.01;
+
+  if (!changed) {
+    return;
+  }
+
+  for (const animation of ragPanel.getAnimations()) {
+    animation.cancel();
+  }
+
+  ragPanel.animate(
+    [
+      {
+        transform: `translate(${deltaX}px, ${deltaY}px) scaleX(${scaleX})`
+      },
+      {
+        transform: "translate(0, 0) scaleX(1)"
+      }
+    ],
+    {
+      duration: 460,
+      easing: "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    }
+  );
+}
+
+function syncRagExpandedWidth() {
+  if (!workspace) {
+    return;
+  }
+
+  workspace.style.setProperty("--rag-expanded-width", `${workspace.getBoundingClientRect().width}px`);
 }
 
 function renderResult(result) {

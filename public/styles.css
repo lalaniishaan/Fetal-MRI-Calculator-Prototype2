@@ -109,9 +109,21 @@ h3 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  grid-template-columns:
+    minmax(0, calc((100% - 18px) * 0.625))
+    minmax(360px, calc((100% - 18px) * 0.375));
   gap: 18px;
   align-items: start;
+}
+
+.input-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  contain: inline-size;
+  gap: 18px;
 }
 
 .panel {
@@ -691,8 +703,16 @@ button:disabled {
 }
 
 .rag-panel {
-  margin-top: 18px;
+  transform-origin: top left;
+  will-change: transform;
+  width: var(--rag-expanded-width, 100%);
+  max-width: calc(100vw - 32px);
   padding: 18px;
+}
+
+.workspace.has-results .rag-panel {
+  width: 100%;
+  max-width: 100%;
 }
 
 .rag-header {
@@ -792,11 +812,30 @@ button:disabled {
 
 @media (max-width: 980px) {
   .workspace {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-stack {
+    display: contents;
+  }
+
+  .entry-panel {
+    order: 1;
   }
 
   .result-panel {
+    order: 2;
+    width: 100%;
     position: static;
+  }
+
+  .rag-panel,
+  .workspace.has-results .rag-panel {
+    order: 3;
+    width: 100%;
+    max-width: 100%;
   }
 }
 

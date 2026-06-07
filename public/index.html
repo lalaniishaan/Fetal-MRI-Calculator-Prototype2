@@ -17,108 +17,142 @@
       </header>
 
       <div class="workspace">
-        <form id="calculator-form" class="panel entry-panel">
-          <section class="form-section">
-            <div class="section-heading">
-              <div>
-                <p class="section-kicker">Patient context</p>
-                <h2>Gestational age</h2>
+        <div class="input-stack">
+          <form id="calculator-form" class="panel entry-panel">
+            <section class="form-section">
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Patient context</p>
+                  <h2>Gestational age</h2>
+                </div>
               </div>
+              <label class="field field-wide" for="ga">
+                <span>Gestational age</span>
+                <input id="ga" name="ga" placeholder="28w3d or 28+3" required />
+              </label>
+            </section>
+
+            <fieldset class="form-section">
+              <legend>
+                <span class="section-kicker">Measurements (mm)</span>
+                <span>Global brain and skull</span>
+              </legend>
+              <div class="grid">
+                <label class="field" for="skull_bpd">
+                  <span>Skull BPD</span>
+                  <input id="skull_bpd" name="skull_bpd" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="skull_ofd">
+                  <span>Skull OFD</span>
+                  <input id="skull_ofd" name="skull_ofd" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="brain_bpd">
+                  <span>Brain BPD</span>
+                  <input id="brain_bpd" name="brain_bpd" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="brain_ofd_left">
+                  <span>Brain OFD-L</span>
+                  <input id="brain_ofd_left" name="brain_ofd_left" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="brain_ofd_right">
+                  <span>Brain OFD-R</span>
+                  <input id="brain_ofd_right" name="brain_ofd_right" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-section">
+              <legend>
+                <span class="section-kicker">Measurements (mm)</span>
+                <span>Ventricles and midline</span>
+              </legend>
+              <div class="grid">
+                <label class="field" for="atrium_left">
+                  <span>Atrium L</span>
+                  <input id="atrium_left" name="atrium_left" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="atrium_right">
+                  <span>Atrium R</span>
+                  <input id="atrium_right" name="atrium_right" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="csp">
+                  <span>CSP</span>
+                  <input id="csp" name="csp" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="cc_length">
+                  <span>CC length</span>
+                  <input id="cc_length" name="cc_length" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="third_ventricle">
+                  <span>Third ventricle</span>
+                  <input id="third_ventricle" name="third_ventricle" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-section">
+              <legend>
+                <span class="section-kicker">Measurements (mm)</span>
+                <span>Posterior fossa and brainstem</span>
+              </legend>
+              <div class="grid">
+                <label class="field" for="tcd">
+                  <span>TCD</span>
+                  <input id="tcd" name="tcd" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="vermis_cc">
+                  <span>Vermis CC</span>
+                  <input id="vermis_cc" name="vermis_cc" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="vermis_ap">
+                  <span>Vermis AP</span>
+                  <input id="vermis_ap" name="vermis_ap" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+                <label class="field" for="pons_ap">
+                  <span>Pons AP</span>
+                  <input id="pons_ap" name="pons_ap" type="number" min="0" step="0.1" inputmode="decimal" />
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="actions">
+              <button class="primary-action" type="submit">Evaluate</button>
+              <button class="secondary-action" type="reset">Reset</button>
             </div>
-            <label class="field field-wide" for="ga">
-              <span>Gestational age</span>
-              <input id="ga" name="ga" placeholder="28w3d or 28+3" required />
-            </label>
+          </form>
+
+          <section class="panel rag-panel">
+            <div class="rag-header">
+              <div>
+                <p class="section-kicker">Literature RAG</p>
+                <h2>Grounded question</h2>
+              </div>
+              <div id="rag-health" class="status-chip">Index loading</div>
+            </div>
+            <form id="rag-form" class="rag-form">
+              <label class="field" for="rag-query">
+                <span>Question</span>
+                <textarea
+                  id="rag-query"
+                  name="query"
+                  rows="3"
+                  placeholder="What atrial width is considered mild ventriculomegaly?"
+                  required
+                ></textarea>
+              </label>
+              <div class="actions rag-actions">
+                <button class="primary-action" type="submit">Ask</button>
+                <button id="retrieve-only" class="secondary-action" type="button">Retrieve only</button>
+              </div>
+            </form>
+            <section id="rag-result" class="rag-result" aria-live="polite">
+              <div class="rag-empty">
+                <h3>No answer yet</h3>
+                <p>Local evidence will appear here.</p>
+              </div>
+            </section>
           </section>
-
-          <fieldset class="form-section">
-            <legend>
-              <span class="section-kicker">Measurements (mm)</span>
-              <span>Global brain and skull</span>
-            </legend>
-            <div class="grid">
-              <label class="field" for="skull_bpd">
-                <span>Skull BPD</span>
-                <input id="skull_bpd" name="skull_bpd" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="skull_ofd">
-                <span>Skull OFD</span>
-                <input id="skull_ofd" name="skull_ofd" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="brain_bpd">
-                <span>Brain BPD</span>
-                <input id="brain_bpd" name="brain_bpd" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="brain_ofd_left">
-                <span>Brain OFD-L</span>
-                <input id="brain_ofd_left" name="brain_ofd_left" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="brain_ofd_right">
-                <span>Brain OFD-R</span>
-                <input id="brain_ofd_right" name="brain_ofd_right" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="form-section">
-            <legend>
-              <span class="section-kicker">Measurements (mm)</span>
-              <span>Ventricles and midline</span>
-            </legend>
-            <div class="grid">
-              <label class="field" for="atrium_left">
-                <span>Atrium L</span>
-                <input id="atrium_left" name="atrium_left" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="atrium_right">
-                <span>Atrium R</span>
-                <input id="atrium_right" name="atrium_right" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="csp">
-                <span>CSP</span>
-                <input id="csp" name="csp" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="cc_length">
-                <span>CC length</span>
-                <input id="cc_length" name="cc_length" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="third_ventricle">
-                <span>Third ventricle</span>
-                <input id="third_ventricle" name="third_ventricle" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset class="form-section">
-            <legend>
-              <span class="section-kicker">Measurements (mm)</span>
-              <span>Posterior fossa and brainstem</span>
-            </legend>
-            <div class="grid">
-              <label class="field" for="tcd">
-                <span>TCD</span>
-                <input id="tcd" name="tcd" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="vermis_cc">
-                <span>Vermis CC</span>
-                <input id="vermis_cc" name="vermis_cc" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="vermis_ap">
-                <span>Vermis AP</span>
-                <input id="vermis_ap" name="vermis_ap" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-              <label class="field" for="pons_ap">
-                <span>Pons AP</span>
-                <input id="pons_ap" name="pons_ap" type="number" min="0" step="0.1" inputmode="decimal" />
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="actions">
-            <button class="primary-action" type="submit">Evaluate</button>
-            <button class="secondary-action" type="reset">Reset</button>
-          </div>
-        </form>
+        </div>
 
         <aside class="panel result-panel">
           <div class="result-toolbar">
@@ -137,38 +171,6 @@
           </section>
         </aside>
       </div>
-
-      <section class="panel rag-panel">
-        <div class="rag-header">
-          <div>
-            <p class="section-kicker">Literature RAG</p>
-            <h2>Grounded question</h2>
-          </div>
-          <div id="rag-health" class="status-chip">Index loading</div>
-        </div>
-        <form id="rag-form" class="rag-form">
-          <label class="field" for="rag-query">
-            <span>Question</span>
-            <textarea
-              id="rag-query"
-              name="query"
-              rows="3"
-              placeholder="What atrial width is considered mild ventriculomegaly?"
-              required
-            ></textarea>
-          </label>
-          <div class="actions rag-actions">
-            <button class="primary-action" type="submit">Ask</button>
-            <button id="retrieve-only" class="secondary-action" type="button">Retrieve only</button>
-          </div>
-        </form>
-        <section id="rag-result" class="rag-result" aria-live="polite">
-          <div class="rag-empty">
-            <h3>No answer yet</h3>
-            <p>Local evidence will appear here.</p>
-          </div>
-        </section>
-      </section>
     </main>
     <script src="app.js"></script>
   </body>
