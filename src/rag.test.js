@@ -79,6 +79,7 @@ describe("local TF-IDF RAG", () => {
         const result = await engine.answer("What should happen before answer generation?", 2);
         expect(result.generatedWith).toBe("local-retrieval");
         expect(result.answer).toContain("[C1]");
+        expect(result.answer).not.toContain("GEMINI_API_KEY");
         expect(result.contexts.length).toBeGreaterThan(0);
         if (originalApiKey !== undefined) {
             process.env.GEMINI_API_KEY = originalApiKey;

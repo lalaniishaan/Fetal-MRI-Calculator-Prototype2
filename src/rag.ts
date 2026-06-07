@@ -511,8 +511,7 @@ function buildExtractiveAnswer(
   return [
     ...caseSummary,
     "Retrieved evidence summary:",
-    ...evidence,
-    "Set GEMINI_API_KEY to enable generated synthesis over the same retrieved context."
+    ...evidence
   ].join("\n");
 }
 

@@ -97,6 +97,7 @@ describe("local TF-IDF RAG", () => {
 
     expect(result.generatedWith).toBe("local-retrieval");
     expect(result.answer).toContain("[C1]");
+    expect(result.answer).not.toContain("GEMINI_API_KEY");
     expect(result.contexts.length).toBeGreaterThan(0);
 
     if (originalApiKey !== undefined) {

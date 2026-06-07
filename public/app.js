@@ -333,7 +333,7 @@ async function loadRagHealth() {
     }
 
     const health = await response.json();
-    ragHealth.textContent = `${health.chunkCount} chunks`;
+    ragHealth.textContent = `${health.chunkCount} chunks - ${health.geminiEnabled ? "Gemini" : "Local retrieval"}`;
   } catch {
     ragHealth.textContent = "Index unavailable";
   }
