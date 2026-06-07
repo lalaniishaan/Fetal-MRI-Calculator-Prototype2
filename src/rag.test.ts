@@ -48,6 +48,14 @@ const caseContext: RagCaseContext = {
 };
 
 describe("local TF-IDF RAG", () => {
+  it("falls back to the embedded corpus when workspace markdown files are unavailable", async () => {
+    const engine = await TfidfRagEngine.fromWorkspace("__missing_rag_workspace__");
+    const health = engine.health();
+
+    expect(health.sourceCount).toBe(4);
+    expect(health.chunkCount).toBeGreaterThan(0);
+  });
+
   it("retrieves relevant chunks with provenance labels", () => {
     const engine = TfidfRagEngine.fromDocuments(documents, { chunkWords: 40, overlapWords: 8 });
     const contexts = engine.retrieve("What atrial width defines mild ventriculomegaly?", 2);

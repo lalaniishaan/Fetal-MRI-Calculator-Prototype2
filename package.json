@@ -7,10 +7,11 @@
     "dev": "node --watch --loader ts-node/esm src/server.ts",
     "start": "npm run build && node src/server.js",
     "preview": "npm run build && node src/server.js",
-    "build": "tsc",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx"
+    "generate:rag-corpus": "node scripts/build-rag-corpus.mjs",
+    "build": "npm run generate:rag-corpus && tsc",
+    "test": "npm run generate:rag-corpus && vitest run",
+    "typecheck": "npm run generate:rag-corpus && tsc --noEmit",
+    "lint": "npm run generate:rag-corpus && eslint . --ext .ts,.tsx"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",

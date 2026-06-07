@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import { join } from "path";
+import { embeddedRagDocuments } from "./rag-corpus.generated.js";
 const DEFAULT_CHUNK_WORDS = 320;
 const DEFAULT_OVERLAP_WORDS = 60;
 const DEFAULT_TOP_K = 5;
@@ -69,11 +70,7 @@ export class TfidfRagEngine {
         return new TfidfRagEngine(chunks, idf, vectors);
     }
     static async fromWorkspace(rootDir) {
-        const documents = await Promise.all(defaultDocuments.map(async (document) => ({
-            ...document,
-            text: await fs.readFile(join(rootDir, document.path), "utf-8")
-        })));
-        return TfidfRagEngine.fromDocuments(documents);
+        return TfidfRagEngine.fromDocuments(await readWorkspaceDocuments(rootDir));
     }
     health() {
         return {
@@ -129,6 +126,26 @@ export class TfidfRagEngine {
             prompt
         };
     }
+}
+async function readWorkspaceDocuments(rootDir) {
+    try {
+        return await Promise.all(defaultDocuments.map(async (document) => ({
+            ...document,
+            text: await fs.readFile(join(rootDir, document.path), "utf-8")
+        })));
+    }
+    catch (error) {
+        if (isMissingFileError(error)) {
+            return embeddedRagDocuments;
+        }
+        throw error;
+    }
+}
+function isMissingFileError(error) {
+    return (typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "ENOENT");
 }
 export function buildGroundedPrompt(query, contexts, caseContext) {
     const contextBlock = contexts.length === 0

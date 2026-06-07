@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import { join } from "path";
+import { embeddedRagDocuments } from "./rag-corpus.generated.js";
 
 export type RagDocument = {
   sourceId: string;
@@ -137,14 +138,7 @@ export class TfidfRagEngine {
   }
 
   static async fromWorkspace(rootDir: string): Promise<TfidfRagEngine> {
-    const documents = await Promise.all(
-      defaultDocuments.map(async (document) => ({
-        ...document,
-        text: await fs.readFile(join(rootDir, document.path), "utf-8")
-      }))
-    );
-
-    return TfidfRagEngine.fromDocuments(documents);
+    return TfidfRagEngine.fromDocuments(await readWorkspaceDocuments(rootDir));
   }
 
   health(): { chunkCount: number; sourceCount: number; retrievalBackend: "local-tfidf" } {
@@ -209,6 +203,32 @@ export class TfidfRagEngine {
       prompt
     };
   }
+}
+
+async function readWorkspaceDocuments(rootDir: string): Promise<RagDocument[]> {
+  try {
+    return await Promise.all(
+      defaultDocuments.map(async (document) => ({
+        ...document,
+        text: await fs.readFile(join(rootDir, document.path), "utf-8")
+      }))
+    );
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return embeddedRagDocuments;
+    }
+
+    throw error;
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 export function buildGroundedPrompt(
