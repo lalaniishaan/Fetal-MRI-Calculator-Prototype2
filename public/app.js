@@ -7,6 +7,7 @@ const ragResult = document.getElementById("rag-result");
 const ragHealth = document.getElementById("rag-health");
 const workspace = document.querySelector(".workspace");
 const ragPanel = document.querySelector(".rag-panel");
+const resultPanel = document.querySelector(".result-panel");
 const retrieveOnlyButton = document.getElementById("retrieve-only");
 
 const parameterOrder = [
@@ -45,6 +46,12 @@ const parameterLabels = {
 
 let latestReport = "";
 let latestEvaluationResult = null;
+let ragPanelTransitionCleanup;
+let resultPanelTransitionCleanup;
+
+const panelMotionDuration = 520;
+const panelMotionEasing = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+const outputRevealDelay = 360;
 
 syncRagExpandedWidth();
 window.addEventListener("resize", syncRagExpandedWidth);
@@ -89,7 +96,7 @@ form.addEventListener("submit", async (event) => {
     const result = normalizeResult(await response.json());
     latestEvaluationResult = result;
     latestReport = buildReport(result);
-    animateRagLayout(() => {
+    animatePanelLayout(() => {
       resultArea.innerHTML = renderResult(result);
       workspace.classList.add("has-results");
     });
@@ -104,7 +111,7 @@ form.addEventListener("reset", () => {
     latestReport = "";
     latestEvaluationResult = null;
     copyButton.disabled = true;
-    animateRagLayout(() => {
+    animatePanelLayout(() => {
       renderEmptyState();
       workspace.classList.remove("has-results");
     });
@@ -154,52 +161,158 @@ function renderMessage(title, body, tone = "") {
   `;
 }
 
-function animateRagLayout(updateLayout) {
+function animatePanelLayout(updateLayout) {
   if (!workspace || !ragPanel) {
     updateLayout();
     return;
   }
 
   syncRagExpandedWidth();
-  const before = ragPanel.getBoundingClientRect();
+  const hadResults = workspace.classList.contains("has-results");
+  const ragBefore = ragPanel.getBoundingClientRect();
+  const resultBefore = resultPanel?.getBoundingClientRect();
   updateLayout();
   syncRagExpandedWidth();
-  const after = ragPanel.getBoundingClientRect();
+  const hasResults = workspace.classList.contains("has-results");
+  const ragAfter = ragPanel.getBoundingClientRect();
+  const resultAfter = resultPanel?.getBoundingClientRect();
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     return;
   }
 
-  const deltaX = before.left - after.left;
-  const deltaY = before.top - after.top;
-  const scaleX = before.width > 0 && after.width > 0 ? before.width / after.width : 1;
+  animateRagPanelWidth(ragBefore, ragAfter);
+
+  if (resultBefore && resultAfter) {
+    animateResultPanel(resultBefore, resultAfter, {
+      reveal: !hadResults && hasResults,
+      delay: !hadResults && hasResults ? outputRevealDelay : 0
+    });
+  }
+}
+
+function animateRagPanelWidth(before, after) {
   const changed =
-    Math.abs(deltaX) > 1 ||
-    Math.abs(deltaY) > 1 ||
-    Math.abs(1 - scaleX) > 0.01;
+    Math.abs(before.left - after.left) > 1 ||
+    Math.abs(before.top - after.top) > 1 ||
+    Math.abs(before.width - after.width) > 1;
 
   if (!changed) {
     return;
   }
 
-  for (const animation of ragPanel.getAnimations()) {
-    animation.cancel();
+  if (ragPanelTransitionCleanup) {
+    ragPanelTransitionCleanup();
   }
 
-  ragPanel.animate(
-    [
-      {
-        transform: `translate(${deltaX}px, ${deltaY}px) scaleX(${scaleX})`
-      },
-      {
-        transform: "translate(0, 0) scaleX(1)"
-      }
-    ],
+  ragPanel.style.overflow = "hidden";
+  ragPanel.style.maxWidth = `${Math.max(before.width, after.width)}px`;
+  ragPanel.style.width = `${before.width}px`;
+  ragPanel.getBoundingClientRect();
+
+  const animation = ragPanel.animate(
+    [{ width: `${before.width}px` }, { width: `${after.width}px` }],
     {
-      duration: 460,
-      easing: "cubic-bezier(0.2, 0.8, 0.2, 1)"
+      duration: panelMotionDuration,
+      easing: panelMotionEasing,
+      fill: "both"
     }
   );
+
+  const cleanup = createAnimationCleanup(animation, () => {
+    ragPanel.style.overflow = "";
+    ragPanel.style.maxWidth = "";
+    ragPanel.style.width = "";
+    if (ragPanelTransitionCleanup === cleanup) {
+      ragPanelTransitionCleanup = undefined;
+    }
+  });
+
+  ragPanelTransitionCleanup = cleanup;
+}
+
+function animateResultPanel(before, after, options = {}) {
+  if (!resultPanel) {
+    return;
+  }
+
+  if (resultPanelTransitionCleanup) {
+    resultPanelTransitionCleanup();
+  }
+
+  const heightChanged = Math.abs(before.height - after.height) > 1;
+  const shouldReveal = options.reveal === true;
+
+  if (!heightChanged && !shouldReveal) {
+    return;
+  }
+
+  const startFrame = {};
+  const endFrame = {};
+
+  resultPanel.style.overflow = "hidden";
+
+  if (heightChanged) {
+    resultPanel.style.height = `${before.height}px`;
+    startFrame.height = `${before.height}px`;
+    endFrame.height = `${after.height}px`;
+  }
+
+  if (shouldReveal) {
+    resultPanel.style.clipPath = "inset(0 100% 0 0)";
+    resultPanel.style.opacity = "0.01";
+    startFrame.clipPath = "inset(0 100% 0 0)";
+    startFrame.opacity = 0.01;
+    endFrame.clipPath = "inset(0 0 0 0)";
+    endFrame.opacity = 1;
+  }
+
+  resultPanel.getBoundingClientRect();
+
+  const animation = resultPanel.animate([startFrame, endFrame], {
+    duration: panelMotionDuration,
+    delay: options.delay ?? 0,
+    easing: panelMotionEasing,
+    fill: "both"
+  });
+
+  const cleanup = createAnimationCleanup(animation, () => {
+    resultPanel.style.overflow = "";
+    resultPanel.style.height = "";
+    resultPanel.style.clipPath = "";
+    resultPanel.style.opacity = "";
+    if (resultPanelTransitionCleanup === cleanup) {
+      resultPanelTransitionCleanup = undefined;
+    }
+  });
+
+  resultPanelTransitionCleanup = cleanup;
+}
+
+function createAnimationCleanup(animation, resetStyles) {
+  let cleanedUp = false;
+  const timing = animation.effect.getTiming();
+  const timeoutId = window.setTimeout(cleanup, timing.delay + timing.duration + 140);
+
+  function cleanup() {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    window.clearTimeout(timeoutId);
+    animation.removeEventListener("finish", cleanup);
+    animation.removeEventListener("cancel", cleanup);
+    if (animation.playState !== "idle") {
+      animation.cancel();
+    }
+    resetStyles();
+  }
+
+  animation.addEventListener("finish", cleanup);
+  animation.addEventListener("cancel", cleanup);
+
+  return cleanup;
 }
 
 function syncRagExpandedWidth() {

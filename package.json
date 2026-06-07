@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --loader ts-node/esm src/server.ts",
+    "dev": "node --disable-warning=DEP0180 --watch --import ./scripts/register-ts-node.mjs src/server.ts",
     "start": "npm run build && node src/server.js",
     "preview": "npm run build && node src/server.js",
     "generate:rag-corpus": "node scripts/build-rag-corpus.mjs",

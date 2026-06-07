@@ -17,7 +17,9 @@ try {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicFolder = join(__dirname, "../public");
 const workspaceFolder = join(__dirname, "..");
-const port = Number(process.env.PORT ?? 3001);
+const defaultPort = 3001;
+const requestedPort = Number(process.env.PORT ?? defaultPort);
+const portWasExplicit = process.env.PORT !== undefined;
 let ragEnginePromise: Promise<TfidfRagEngine> | undefined;
 
 const mimeTypes: Record<string, string> = {
@@ -33,6 +35,15 @@ function isMissingEnvFileError(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     error.code === "ENOENT"
+  );
+}
+
+function isAddressInUseError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "EADDRINUSE"
   );
 }
 
@@ -190,7 +201,7 @@ function requireString(input: unknown, field: string, maxLength: number): string
   return input.trim();
 }
 
-const server = http.createServer(async (req, res) => {
+const requestListener: http.RequestListener = async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
 
   if (req.method === "GET" && url.pathname === "/api/rag/health") {
@@ -266,8 +277,33 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
   res.end("Not found");
-});
+};
 
-server.listen(port, () => {
-  console.log(`Website running at http://localhost:${port}`);
-});
+function startServer(port: number, attemptsRemaining = 10): void {
+  const server = http.createServer(requestListener);
+  const handleListenError = (error: Error): void => {
+    if (isAddressInUseError(error) && !portWasExplicit && attemptsRemaining > 0) {
+      const nextPort = port + 1;
+      console.warn(`Port ${port} is already in use. Trying http://localhost:${nextPort} instead.`);
+      startServer(nextPort, attemptsRemaining - 1);
+      return;
+    }
+
+    if (isAddressInUseError(error)) {
+      console.error(`Port ${port} is already in use. Stop the other dev server or run with PORT=<free port>.`);
+      process.exit(1);
+    }
+
+    throw error;
+  };
+
+  server.once("error", handleListenError);
+  server.listen(port, () => {
+    server.on("error", (error) => {
+      throw error;
+    });
+    console.log(`Website running at http://localhost:${port}`);
+  });
+}
+
+startServer(requestedPort);
